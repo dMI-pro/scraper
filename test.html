@@ -7,6 +7,54 @@
         #result { white-space: pre-wrap; background: #f0f0f0; padding: 10px; margin-top: 10px; }
         .error { color: red; }
         .success { color: green; }
+        
+        /* Statistics styles */
+        .statistics {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .statistics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Table styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .data-table th {
+            background: #f4f4f4;
+        }
+        .description-cell {
+            max-height: 50px;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+        }
+        .description-cell.expanded {
+            max-height: none;
+        }
+        .description-toggle {
+            color: blue;
+            text-decoration: underline;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -14,13 +62,53 @@
     <button onclick="sendRequest()">Send Request</button>
     <div id="status"></div>
     <div id="result"></div>
-    <div id="data"></div>
+
+    <!-- Statistics Section -->
+    <div class="statistics">
+        <h2>Статистика поиска</h2>
+        <div class="statistics-grid">
+            <div class="stat-card">
+                <h3>Количество объявлений</h3>
+                <div id="total-count">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Минимальная цена</h3>
+                <div id="min-price">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Максимальная цена</h3>
+                <div id="max-price">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Средняя цена</h3>
+                <div id="avg-price">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-container">
+        <h2>Результаты поиска</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Цена</th>
+                    <th>Дата</th>
+                    <th>Продавец</th>
+                    <th>Описание</th>
+                </tr>
+            </thead>
+            <tbody id="items-table">
+            </tbody>
+        </table>
+    </div>
 
     <script>
         async function sendRequest() {
             const statusDiv = document.getElementById('status');
             const resultDiv = document.getElementById('result');
-            const dataDiv = document.getElementById('data');
+            const itemsTableBody = document.getElementById('items-table');
 
             statusDiv.innerHTML = 'Sending request...';
             resultDiv.innerHTML = '';
@@ -36,22 +124,105 @@
                     })
                 });
 
-                const data = await response.text();
-                console.log(data);
-                debugger
+                const data = await response.text(); // Получаем HTML как текст
                 
                 if (response.ok) {
                     statusDiv.innerHTML = '<span class="success">Request successful!</span>';
-                    resultDiv.innerHTML = `Status: ${response.status}\nHeaders: ${JSON.stringify(response.headers, null, 2)}\n\nResponse preview (first 500 chars):\n${data.substring(0, 500)}`;
-                    dataDiv.innerHTML = data;
+                    
+                    // Создаем временный DOM элемент для парсинга HTML
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(data, 'text/html');
+                    
+                    // Собираем все товары
+                    const items = [];
+                    const prices = [];
+                    
+                    // Находим все карточки товаров
+                    const productCards = doc.querySelectorAll('[data-marker="item"]');
+                    
+                    productCards.forEach(card => {
+                        try {
+                            // Извлекаем цену и конвертируем в число
+                            const priceElement = card.querySelector('.price-text-_YGDY');
+                            const priceText = priceElement ? priceElement.textContent : '0';
+                            const price = parseFloat(priceText.replace(/[^\d]/g, ''));
+                            if (!isNaN(price)) {
+                                prices.push(price);
+                            }
+
+                            // Собираем данные о товаре
+                            const item = {
+                                title: card.querySelector('[itemprop="name"]')?.textContent.trim() || 'Нет названия',
+                                price: priceText.trim(),
+                                date: card.querySelector('[data-marker="item-date"]')?.textContent.trim() || 'Нет даты',
+                                seller: card.querySelector('.style-seller-info-name')?.textContent.trim() || 'Нет продавца',
+                                description: card.querySelector('.iva-item-description')?.textContent.trim() || 'Нет описания'
+                            };
+                            
+                            items.push(item);
+                        } catch (error) {
+                            console.error('Error processing card:', error);
+                        }
+                    });
+
+                    // Рассчитываем статистику
+                    const statistics = {
+                        totalCount: items.length,
+                        minPrice: Math.min(...prices),
+                        maxPrice: Math.max(...prices),
+                        avgPrice: prices.length ? prices.reduce((a, b) => a + b) / prices.length : 0
+                    };
+
+                    // Обновляем статистику на странице
+                    updateStatistics(statistics);
+                    
+                    // Очищаем таблицу
+                    itemsTableBody.innerHTML = '';
+                    
+                    // Заполняем таблицу данными
+                    items.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.title}</td>
+                            <td>${item.price}</td>
+                            <td>${item.date}</td>
+                            <td>${item.seller}</td>
+                            <td class="description-cell">
+                                ${item.description}
+                                <div class="description-toggle">Развернуть</div>
+                            </td>
+                        `;
+                        itemsTableBody.appendChild(row);
+                    });
+
+                    // Добавляем обработчики для разворачивания описания
+                    setupDescriptionToggles();
                 } else {
                     statusDiv.innerHTML = '<span class="error">Request failed!</span>';
-                    resultDiv.innerHTML = `Error: ${response.status} ${response.statusText}\n${data}`;
+                    resultDiv.innerHTML = `Error: ${response.status} ${response.statusText}`;
                 }
             } catch (error) {
                 statusDiv.innerHTML = '<span class="error">Request failed!</span>';
                 resultDiv.innerHTML = `Error: ${error.message}`;
             }
+        }
+
+        function updateStatistics(statistics) {
+            document.getElementById('total-count').textContent = statistics.totalCount;
+            document.getElementById('min-price').textContent = `${statistics.minPrice.toLocaleString()} ₽`;
+            document.getElementById('max-price').textContent = `${statistics.maxPrice.toLocaleString()} ₽`;
+            document.getElementById('avg-price').textContent = `${Math.round(statistics.avgPrice).toLocaleString()} ₽`;
+        }
+
+        function setupDescriptionToggles() {
+            document.querySelectorAll('.description-cell').forEach(cell => {
+                const toggle = cell.querySelector('.description-toggle');
+                toggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    cell.classList.toggle('expanded');
+                    toggle.textContent = cell.classList.contains('expanded') ? 'Свернуть' : 'Развернуть';
+                });
+            });
         }
     </script>
 </body>
