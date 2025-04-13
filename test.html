@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Scraper API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #result { white-space: pre-wrap; background: #f0f0f0; padding: 10px; margin-top: 10px; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Test Scraper API</h1>
+    <button onclick="sendRequest()">Send Request</button>
+    <div id="status"></div>
+    <div id="result"></div>
+    <div id="data"></div>
+
+    <script>
+        async function sendRequest() {
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+            const dataDiv = document.getElementById('data');
+
+            statusDiv.innerHTML = 'Sending request...';
+            resultDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('http://localhost:8080/v1/scrap', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        url: 'https://www.avito.ru/moskva/tovary_dlya_kompyutera/komplektuyuschie/protsessory-ASgBAgICAkTGB~pm7gniZw?cd=1&q=i5+12400f'
+                    })
+                });
+
+                const data = await response.text();
+                console.log(data);
+                debugger
+                
+                if (response.ok) {
+                    statusDiv.innerHTML = '<span class="success">Request successful!</span>';
+                    resultDiv.innerHTML = `Status: ${response.status}\nHeaders: ${JSON.stringify(response.headers, null, 2)}\n\nResponse preview (first 500 chars):\n${data.substring(0, 500)}`;
+                    dataDiv.innerHTML = data;
+                } else {
+                    statusDiv.innerHTML = '<span class="error">Request failed!</span>';
+                    resultDiv.innerHTML = `Error: ${response.status} ${response.statusText}\n${data}`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="error">Request failed!</span>';
+                resultDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html> 
