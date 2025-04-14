@@ -124,94 +124,91 @@
                     })
                 });
 
-                const data = await response.text(); // Получаем HTML как текст
-                
-                if (response.ok) {
-                    statusDiv.innerHTML = '<span class="success">Request successful!</span>';
-                    
-                    // Создаем временный DOM элемент для парсинга HTML
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(data, 'text/html');
-                    
-                    // Собираем все товары
-                    const items = [];
-                    const prices = [];
-                    
-                    // Находим все карточки товаров
-                    const productCards = doc.querySelectorAll('[data-marker="item"]');
-                    
-                    productCards.forEach(card => {
-                        try {
-                            // Извлекаем цену и конвертируем в число
-                            const priceElement = card.querySelector('.price-text-_YGDY');
-                            const priceText = priceElement ? priceElement.textContent : '0';
-                            const price = parseFloat(priceText.replace(/[^\d]/g, ''));
-                            if (!isNaN(price)) {
-                                prices.push(price);
-                            }
-
-                            // Собираем данные о товаре
-                            const item = {
-                                title: card.querySelector('[itemprop="name"]')?.textContent.trim() || 'Нет названия',
-                                price: priceText.trim(),
-                                date: card.querySelector('[data-marker="item-date"]')?.textContent.trim() || 'Нет даты',
-                                seller: card.querySelector('.style-seller-info-name')?.textContent.trim() || 'Нет продавца',
-                                description: card.querySelector('.iva-item-description')?.textContent.trim() || 'Нет описания'
-                            };
-                            
-                            items.push(item);
-                        } catch (error) {
-                            console.error('Error processing card:', error);
-                        }
-                    });
-
-                    // Рассчитываем статистику
-                    const statistics = {
-                        totalCount: items.length,
-                        minPrice: Math.min(...prices),
-                        maxPrice: Math.max(...prices),
-                        avgPrice: prices.length ? prices.reduce((a, b) => a + b) / prices.length : 0
-                    };
-
-                    // Обновляем статистику на странице
-                    updateStatistics(statistics);
-                    
-                    // Очищаем таблицу
-                    itemsTableBody.innerHTML = '';
-                    
-                    // Заполняем таблицу данными
-                    items.forEach(item => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${item.title}</td>
-                            <td>${item.price}</td>
-                            <td>${item.date}</td>
-                            <td>${item.seller}</td>
-                            <td class="description-cell">
-                                ${item.description}
-                                <div class="description-toggle">Развернуть</div>
-                            </td>
-                        `;
-                        itemsTableBody.appendChild(row);
-                    });
-
-                    // Добавляем обработчики для разворачивания описания
-                    setupDescriptionToggles();
-                } else {
-                    statusDiv.innerHTML = '<span class="error">Request failed!</span>';
-                    resultDiv.innerHTML = `Error: ${response.status} ${response.statusText}`;
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            } catch (error) {
-                statusDiv.innerHTML = '<span class="error">Request failed!</span>';
-                resultDiv.innerHTML = `Error: ${error.message}`;
-            }
-        }
 
-        function updateStatistics(statistics) {
-            document.getElementById('total-count').textContent = statistics.totalCount;
-            document.getElementById('min-price').textContent = `${statistics.minPrice.toLocaleString()} ₽`;
-            document.getElementById('max-price').textContent = `${statistics.maxPrice.toLocaleString()} ₽`;
-            document.getElementById('avg-price').textContent = `${Math.round(statistics.avgPrice).toLocaleString()} ₽`;
+                // Получаем HTML-контент
+                const htmlContent = await response.text();
+                
+                // Создаем временный контейнер для HTML
+                const tempContainer = document.createElement('div');
+                tempContainer.innerHTML = htmlContent;
+
+                // Теперь можем использовать querySelectorAll
+                const items = [];
+                const prices = [];
+
+                // Находим все карточки товаров
+                const productCards = tempContainer.querySelectorAll('[data-marker="item"]');
+                console.log('Found products:', productCards.length); // Для отладки
+                
+                productCards.forEach(card => {
+                    try {
+                        // Извлекаем цену и конвертируем в число
+                        const priceElement = card.querySelector('.price-text-_YGDY');
+                        const priceText = priceElement ? priceElement.textContent.trim() : '0';
+                        const price = parseFloat(priceText.replace(/[^\d]/g, ''));
+                        if (!isNaN(price)) {
+                            prices.push(price);
+                        }
+
+                        // Собираем данные о товаре
+                        const item = {
+                            title: card.querySelector('[itemprop="name"]')?.textContent.trim() || 'Нет названия',
+                            price: priceText,
+                            date: card.querySelector('[data-marker="item-date"]')?.textContent.trim() || 'Нет даты',
+                            seller: card.querySelector('.style-seller-info-name')?.textContent.trim() || 'Нет продавца',
+                            description: card.querySelector('.iva-item-description')?.textContent.trim() || 'Нет описания'
+                        };
+                        
+                        items.push(item);
+                    } catch (error) {
+                        console.error('Error processing card:', error);
+                    }
+                });
+
+                // Рассчитываем статистику
+                const statistics = {
+                    totalCount: items.length,
+                    minPrice: Math.min(...prices),
+                    maxPrice: Math.max(...prices),
+                    avgPrice: prices.length ? prices.reduce((a, b) => a + b) / prices.length : 0
+                };
+
+                // Обновляем статистику на странице
+                document.getElementById('total-count').textContent = statistics.totalCount;
+                document.getElementById('min-price').textContent = `${statistics.minPrice.toLocaleString()} ₽`;
+                document.getElementById('max-price').textContent = `${statistics.maxPrice.toLocaleString()} ₽`;
+                document.getElementById('avg-price').textContent = `${Math.round(statistics.avgPrice).toLocaleString()} ₽`;
+
+                // Очищаем и заполняем таблицу
+                itemsTableBody.innerHTML = '';
+                items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.title}</td>
+                        <td>${item.price}</td>
+                        <td>${item.date}</td>
+                        <td>${item.seller}</td>
+                        <td class="description-cell">
+                            ${item.description}
+                            <div class="description-toggle">Развернуть</div>
+                        </td>
+                    `;
+                    itemsTableBody.appendChild(row);
+                });
+
+                // Добавляем обработчики для описаний
+                setupDescriptionToggles();
+                
+                statusDiv.innerHTML = '<span class="success">Данные успешно загружены!</span>';
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = '<span class="error">Ошибка загрузки данных!</span>';
+                resultDiv.innerHTML = `Ошибка: ${error.message}`;
+            }
         }
 
         function setupDescriptionToggles() {
